@@ -1,41 +1,22 @@
-# Website
+# Yami Docs
 
-This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
+Yami 编辑器 社区维护文档
 
-### Installation
+# 贡献
 
-```
-$ yarn
-```
+1. 拉取本项目到本地
+2. 修改或新增您的内容
+3. 提交commit并开一个pr
+4. 等待合并
 
-### Local Development
+# 关于
 
-```
-$ yarn start
-```
+作者：[徐然](https://github.com/xiaoxustudio)
 
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
+联系方式：[xugame@qq.com](emailto://xugame@qq.com)
 
-### Build
+欢迎提出您宝贵的 **issue**，我们将会处理。
 
-```
-$ yarn build
-```
+# LICENSE
 
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
-
-### Deployment
-
-Using SSH:
-
-```
-$ USE_SSH=true yarn deploy
-```
-
-Not using SSH:
-
-```
-$ GIT_USER=<Your GitHub username> yarn deploy
-```
-
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+[MIT](./LICENSE)
