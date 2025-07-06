@@ -78,5 +78,9 @@
   "sidebar.tutorialSidebar.category.Hotkeys": {
     "message": "快捷键",
     "description": "The label for category Hotkeys in sidebar tutorialSidebar"
+  },
+  "sidebar.tutorialSidebar.category.Script": {
+    "message": "脚本",
+    "description": "The label for category Script in sidebar tutorialSidebar"
   }
 }

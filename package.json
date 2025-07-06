@@ -5,14 +5,15 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "dev": "docusaurus start",
-    "build": "docusaurus build",
+    "build": "pnpm generate-api && docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
     "serve": "docusaurus serve",
     "write-translations": "docusaurus write-translations",
     "write-heading-ids": "docusaurus write-heading-ids",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "generate-api": "ts-node --project i18n/zh/docusaurus-plugin-content-docs/current/script/tsconfig.json i18n/zh/docusaurus-plugin-content-docs/current/script/generateDocs.ts"
   },
   "dependencies": {
     "@docusaurus/core": "3.7.0",
@@ -28,6 +29,8 @@
     "@docusaurus/module-type-aliases": "3.7.0",
     "@docusaurus/tsconfig": "3.7.0",
     "@docusaurus/types": "3.7.0",
+    "@types/node": "^20.11.0",
+    "ts-node": "^10.9.2",
     "typescript": "~5.6.2"
   },
   "browserslist": {
