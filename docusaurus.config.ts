@@ -10,7 +10,7 @@ const config: Config = {
 	favicon: "img/favicon.ico",
 
 	// Set the production url of your site here
-	url: "https://your-docusaurus-site.example.com",
+	url: "https://open-yami-community.github.io/",
 	// Set the /<baseUrl>/ pathname under which your site is served
 	// For GitHub pages deployment, it is often '/<projectName>/'
 	baseUrl: "/open-yami-doc/",
@@ -81,7 +81,7 @@ const config: Config = {
 					label: "Tutorial",
 				},
 				{
-					href: "https://github.com/facebook/docusaurus",
+					href: "https://github.com/Open-Yami-Community/open-yami-doc",
 					label: "GitHub",
 					position: "right",
 				},
@@ -129,7 +129,12 @@ const config: Config = {
 			darkTheme: prismThemes.dracula,
 		},
 	} satisfies Preset.ThemeConfig,
-	themes: [require.resolve("@easyops-cn/docusaurus-search-local")],
+	themes: [[require.resolve("@easyops-cn/docusaurus-search-local"), {
+		indexDocs: true,
+		indexBlog: true,
+		indexPages: true,
+		language: "zh",
+	}]],
 };
 
 export default config;

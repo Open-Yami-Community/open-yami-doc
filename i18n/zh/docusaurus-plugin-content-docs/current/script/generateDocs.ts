@@ -2,15 +2,11 @@ import * as ts from 'typescript';
 import type {
     Node,
     SourceFile,
-    ParameterDeclaration,
     SyntaxKind,
-    ClassDeclaration,
-    InterfaceDeclaration,
     FunctionDeclaration,
     MethodDeclaration,
     HeritageClause,
     Expression,
-    Type,
     ExpressionWithTypeArguments
 } from 'typescript';
 const fs = require('fs');
@@ -58,13 +54,6 @@ function extractJSDocComment(node: Node, sourceFile: SourceFile): string {
         });
 
     return comments.join('\n');
-}
-
-function getParameterInfo(parameter: ParameterDeclaration, sourceFile: SourceFile): { name: string; type: string; description: string } {
-    const name = parameter.name.getText(sourceFile);
-    const type = parameter.type ? parameter.type.getText(sourceFile) : 'any';
-    const description = extractJSDocComment(parameter, sourceFile);
-    return { name, type, description };
 }
 
 function sanitizeMarkdown(text: string): string {
@@ -394,135 +383,6 @@ function extractReferences(jsDoc: string): { name: string; path: string; }[] {
     return references;
 }
 
-function generateIndexMarkdown(moduleInfo: {
-    [key: string]: {
-        classes: string[];
-        interfaces: string[];
-        functions: string[];
-        description?: string;
-    }
-}): string {
-    let markdown = `---
-sidebar_position: 1
----
-
-# API 参考
-
-本文档提供了所有可用的API参考。每个模块都有其独立的文档页面，详细说明了其功能、接口和用法。
-
-## 模块列表
-
-`;
-
-    // 按类别组织模块
-    const categories = {
-        '核心': ['main', 'yami'],
-        '渲染': ['webgl', 'scene', 'camera'],
-        '交互': ['input', 'event', 'command'],
-        '媒体': ['audio', 'animation'],
-        '界面': ['ui', 'printer'],
-        '数据': ['data', 'variable', 'local'],
-        '工具': ['util', 'codec', 'filter']
-    };
-
-    // 生成分类文档
-    for (const [category, modules] of Object.entries(categories)) {
-        markdown += `### ${category}模块\n\n`;
-        for (const moduleName of modules) {
-            if (moduleInfo[moduleName]) {
-                const info = moduleInfo[moduleName];
-                markdown += `#### [${moduleName}](./${moduleName}/)\n\n`;
-
-                if (info.description) {
-                    markdown += `${info.description}\n\n`;
-                }
-
-                if (info.classes.length > 0) {
-                    markdown += '**类**\n\n';
-                    for (const className of info.classes) {
-                        markdown += `- [${className}](./${moduleName}/${className})\n`;
-                    }
-                    markdown += '\n';
-                }
-
-                if (info.interfaces.length > 0) {
-                    markdown += '**接口**\n\n';
-                    for (const interfaceName of info.interfaces) {
-                        markdown += `- [${interfaceName}](./${moduleName}/${interfaceName})\n`;
-                    }
-                    markdown += '\n';
-                }
-
-                if (info.functions.length > 0) {
-                    markdown += '**函数**\n\n';
-                    for (const functionName of info.functions) {
-                        markdown += `- [${functionName}](./${moduleName}/${functionName})\n`;
-                    }
-                    markdown += '\n';
-                }
-            }
-        }
-    }
-
-    // 添加其他未分类的模块
-    const categorizedModules = new Set(Object.values(categories).flat());
-    const uncategorizedModules = Object.keys(moduleInfo).filter(m => !categorizedModules.has(m));
-
-    if (uncategorizedModules.length > 0) {
-        markdown += `### 其他模块\n\n`;
-        for (const moduleName of uncategorizedModules.sort()) {
-            const info = moduleInfo[moduleName];
-            markdown += `#### [${moduleName}](./${moduleName}/)\n\n`;
-
-            if (info.description) {
-                markdown += `${info.description}\n\n`;
-            }
-
-            if (info.classes.length > 0) {
-                markdown += '**类**\n\n';
-                for (const className of info.classes) {
-                    markdown += `- [${className}](./${moduleName}/${className})\n`;
-                }
-                markdown += '\n';
-            }
-
-            if (info.interfaces.length > 0) {
-                markdown += '**接口**\n\n';
-                for (const interfaceName of info.interfaces) {
-                    markdown += `- [${interfaceName}](./${moduleName}/${interfaceName})\n`;
-                }
-                markdown += '\n';
-            }
-
-            if (info.functions.length > 0) {
-                markdown += '**函数**\n\n';
-                for (const functionName of info.functions) {
-                    markdown += `- [${functionName}](./${moduleName}/${functionName})\n`;
-                }
-                markdown += '\n';
-            }
-        }
-    }
-
-    // 添加版本信息
-    const now = new Date();
-    const timeZone = 'Asia/Shanghai';
-    const formatter = new Intl.DateTimeFormat('zh-CN', {
-        timeZone,
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric',
-        hour12: false
-    });
-
-    markdown += `## 版本信息\n\n文档生成时间：${formatter.format(now)}\n`;
-
-    return markdown;
-}
-
 // 添加清空目录的函数
 function emptyDirectory(directory: string) {
     if (fs.existsSync(directory)) {
@@ -621,164 +481,36 @@ async function main() {
             } else if (kind === 'FunctionDeclaration') {
                 moduleInfo[moduleName].functions.push(itemName);
             }
-
+            const desc = sanitizeJSDoc(item.description).split('\n')[0]
             // 生成独立的文档文件
             const frontMatter = `---
 sidebar_position: 1
-title: ${itemName}
+title: ${itemName} ${!desc.startsWith('@') ? desc : ""}
 ---
 
 `;
+            // 添加版本信息
+            const now = new Date();
+            const timeZone = 'Asia/Shanghai';
+            let formatter = new Intl.DateTimeFormat('zh-CN', {
+                timeZone,
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                second: 'numeric',
+                hour12: false
+            });
+
             const docPath = path.join(moduleDir, `${itemName}.md`);
-            fs.writeFileSync(docPath, `${frontMatter}${markdown}`);
+            fs.writeFileSync(docPath, `${frontMatter}${markdown}\n\n文档生成时间：${formatter.format(now)}\n`);
             console.log(`Generated documentation for ${itemName} at ${docPath}`);
         }
     }
-
-    // 生成主索引文档
-    console.log('Generating API index...');
-    const indexMarkdown = generateModuleIndexMarkdown(moduleInfo);
-    const indexPath = path.join(apiDir, 'index.md');
-    fs.writeFileSync(indexPath, indexMarkdown);
-    console.log(`Generated API index at ${indexPath}`);
 }
 
-// 修改索引生成函数
-function generateModuleIndexMarkdown(moduleInfo: {
-    [key: string]: {
-        methods: { name: string; class?: string }[];
-        functions: string[];
-        description?: string;
-    }
-}): string {
-    let markdown = `---
-sidebar_position: 1
----
 
-# API 参考
-
-本文档提供了所有可用的API参考。每个模块都有其独立的文档页面，详细说明了其功能、接口和用法。
-
-## 模块列表
-
-`;
-
-    // 按类别组织模块
-    const categories = {
-        '核心': ['main', 'yami'],
-        '渲染': ['webgl', 'scene', 'camera'],
-        '交互': ['input', 'event', 'command'],
-        '媒体': ['audio', 'animation'],
-        '界面': ['ui', 'printer'],
-        '数据': ['data', 'variable', 'local'],
-        '工具': ['util', 'codec', 'filter']
-    };
-
-    // 生成分类文档
-    for (const [category, modules] of Object.entries(categories)) {
-        markdown += `### ${category}模块\n\n`;
-        for (const moduleName of modules) {
-            if (moduleInfo[moduleName]) {
-                const info = moduleInfo[moduleName];
-                markdown += `#### [${moduleName}](./${moduleName}/)\n\n`;
-
-                if (info.description) {
-                    markdown += `${info.description}\n\n`;
-                }
-
-                // 按类分组显示方法
-                const methodsByClass = info.methods.reduce((acc, method) => {
-                    const className = method.class || '全局方法';
-                    if (!acc[className]) {
-                        acc[className] = [];
-                    }
-                    acc[className].push(method.name);
-                    return acc;
-                }, {} as { [key: string]: string[] });
-
-                // 显示方法
-                for (const [className, methods] of Object.entries(methodsByClass)) {
-                    markdown += `**${className}**\n\n`;
-                    for (const methodName of methods) {
-                        markdown += `- [${methodName}](./${moduleName}/${methodName})\n`;
-                    }
-                    markdown += '\n';
-                }
-
-                // 显示独立函数
-                if (info.functions.length > 0) {
-                    markdown += '**独立函数**\n\n';
-                    for (const functionName of info.functions) {
-                        markdown += `- [${functionName}](./${moduleName}/${functionName})\n`;
-                    }
-                    markdown += '\n';
-                }
-            }
-        }
-    }
-
-    // 添加其他未分类的模块
-    const categorizedModules = new Set(Object.values(categories).flat());
-    const uncategorizedModules = Object.keys(moduleInfo).filter(m => !categorizedModules.has(m));
-
-    if (uncategorizedModules.length > 0) {
-        markdown += `### 其他模块\n\n`;
-        for (const moduleName of uncategorizedModules.sort()) {
-            const info = moduleInfo[moduleName];
-            markdown += `#### [${moduleName}](./${moduleName}/)\n\n`;
-
-            if (info.description) {
-                markdown += `${info.description}\n\n`;
-            }
-
-            // 按类分组显示方法
-            const methodsByClass = info.methods.reduce((acc, method) => {
-                const className = method.class || '全局方法';
-                if (!acc[className]) {
-                    acc[className] = [];
-                }
-                acc[className].push(method.name);
-                return acc;
-            }, {} as { [key: string]: string[] });
-
-            // 显示方法
-            for (const [className, methods] of Object.entries(methodsByClass)) {
-                markdown += `**${className}**\n\n`;
-                for (const methodName of methods) {
-                    markdown += `- [${methodName}](./${moduleName}/${methodName})\n`;
-                }
-                markdown += '\n';
-            }
-
-            // 显示独立函数
-            if (info.functions.length > 0) {
-                markdown += '**独立函数**\n\n';
-                for (const functionName of info.functions) {
-                    markdown += `- [${functionName}](./${moduleName}/${functionName})\n`;
-                }
-                markdown += '\n';
-            }
-        }
-    }
-
-    // 添加版本信息
-    const now = new Date();
-    const timeZone = 'Asia/Shanghai';
-    const formatter = new Intl.DateTimeFormat('zh-CN', {
-        timeZone,
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric',
-        hour12: false
-    });
-
-    markdown += `## 版本信息\n\n文档生成时间：${formatter.format(now)}\n`;
-
-    return markdown;
-}
 
 main().then(() => {
     // 清空并复制到docs/api
