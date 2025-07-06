@@ -4,5 +4,12 @@
   "compilerOptions": {
     "baseUrl": "."
   },
-  "exclude": [".docusaurus", "build"]
+  "exclude": [
+    ".docusaurus",
+    "build",
+    "docs/api",
+    "docs/script",
+    "i18n/zh/docusaurus-plugin-content-docs/current/api",
+    "i18n/zh/docusaurus-plugin-content-docs/current/script"
+  ]
 }

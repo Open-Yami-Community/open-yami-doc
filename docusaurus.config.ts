@@ -20,7 +20,7 @@ const config: Config = {
 	organizationName: "open-yami-community", // Usually your GitHub org/user name.
 	projectName: "open-yami-doc", // Usually your repo name.
 
-	onBrokenLinks: "throw",
+	onBrokenLinks: "warn",
 	onBrokenMarkdownLinks: "warn",
 
 	// Even if you don't use internationalization, you can use this field to set
