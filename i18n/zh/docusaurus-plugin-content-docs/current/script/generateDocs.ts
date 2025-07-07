@@ -133,15 +133,14 @@ function sanitizeJSDoc(text: string): string {
         .join('\n\n');
 }
 
-function generateMarkdown(items: DocItem[], sourceFile: SourceFile): string {
+function generateMarkdown(items: DocItem[], sourceFile: SourceFile, githubFileUrl: string, targetDocPath: string): string {
     let markdown = '';
 
     for (const item of items) {
         const kindStr = ts.SyntaxKind[item.kind];
         const safeName = sanitizeMarkdown(item.name);
-        const sourceLocation = sourceFile.fileName;
 
-        // 添加标题和类型信息
+          // 添加标题和类型信息
         markdown += `## ${safeName}\n\n`;
         markdown += `**类型**: \`${kindStr}\`\n\n`;
 
@@ -150,7 +149,7 @@ function generateMarkdown(items: DocItem[], sourceFile: SourceFile): string {
             markdown += `**所属类**: \`${item.parentClass}\`\n\n`;
         }
 
-        markdown += `**定义位置**: \`${sourceLocation}\`\n\n`;
+        markdown += `**定义位置**: [\`${path.basename(githubFileUrl)}\`](${githubFileUrl})\n\n`;
 
         // 添加继承信息（如果是类或接口）
         if (item.heritageClauses && item.heritageClauses.length > 0) {
@@ -228,7 +227,9 @@ function generateMarkdown(items: DocItem[], sourceFile: SourceFile): string {
         if (item.node) {
             const { line, character } = sourceFile.getLineAndCharacterOfPosition(item.node.getStart());
             markdown += `### 源代码\n\n`;
-            markdown += `**位置**: 第 ${line + 1} 行, 第 ${character + 1} 列\n\n`;
+            markdown += `**位置**: [第 ${line + 1} 行](${githubFileUrl}#L${line + 1})
+
+`;
 
             // 添加相关代码片段
             const start = item.node.getStart();
@@ -453,6 +454,9 @@ async function main() {
         fs.writeFileSync(path.join(moduleDir, '_category_.json'), JSON.stringify(categoryJson, null, 2));
 
         const filePath = path.join(scriptDir, file);
+        const workspaceFolder = path.resolve(scriptDir, '..', '..', '..', '..', '..');
+        const repoRelativePath = path.relative(workspaceFolder, filePath).replace(/\\/g, '/');
+        const githubFileUrl = `https://github.com/Open-Yami-Community/open-yami-doc/blob/main/${repoRelativePath}`;
         const sourceText = fs.readFileSync(filePath, 'utf-8');
         const sourceFile = ts.createSourceFile(
             file,
@@ -470,7 +474,8 @@ async function main() {
         // 按类型分组处理文档项
         for (const item of docItems) {
             const itemName = sanitizeMarkdown(item.name);
-            const markdown = generateMarkdown([item], sourceFile);
+            const docPath = path.join(moduleDir, `${itemName}.md`);
+            const markdown = generateMarkdown([item], sourceFile, githubFileUrl, docPath);
             const kind = ts.SyntaxKind[item.kind];
 
             if (kind === 'MethodDeclaration') {
@@ -503,7 +508,6 @@ title: ${itemName} ${!desc.startsWith('@') ? desc : ""}
                 hour12: false
             });
 
-            const docPath = path.join(moduleDir, `${itemName}.md`);
             fs.writeFileSync(docPath, `${frontMatter}${markdown}\n\n文档生成时间：${formatter.format(now)}\n`);
             console.log(`Generated documentation for ${itemName} at ${docPath}`);
         }
@@ -521,4 +525,4 @@ main().then(() => {
         docsApiDir,
         { recursive: true }
     );
-}).catch(console.error); 
+}).catch(console.error);
