@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#00b7ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Game controller base -->
+  <path d="M6 12h4" stroke-width="1.5"/>
+  <path d="M8 10v4" stroke-width="1.5"/>
+  <path d="M15 13h2" stroke-width="1.5"/>
+  <path d="M15 11h2" stroke-width="1.5"/>
+  <path d="M21 12c0 1.66-4.03 3-9 3s-9-1.34-9-3" stroke-width="1.5"/>
+  <path d="M3 12v4c0 1.66 4.03 3 9 3s9-1.34 9-3v-4" stroke-width="1.5"/>
+  
+  <!-- Code/script symbol -->
+  <path d="M7 7l-2 2 2 2" stroke-width="1.5"/>
+  <path d="M11 7l2 2-2 2" stroke-width="1.5"/>
+  
+  <!-- Glow effect -->
+  <circle cx="12" cy="12" r="10" stroke-opacity="0.2" stroke-width="0.5"/>
+  <circle cx="12" cy="12" r="7" stroke-opacity="0.1" stroke-width="0.5"/>
+</svg>
