@@ -1,0 +1,46 @@
+---
+sidebar_position: 1
+title: getKey 判断是否已经按下键盘键
+---
+
+## getKey
+
+**类型**: `MethodDeclaration`
+
+**定义位置**: [`input.ts`](https://github.com/Open-Yami-Community/open-yami-doc/blob/main/i18n/zh/docusaurus-plugin-content-docs/current/script/input.ts)
+
+### 描述
+
+判断是否已经按下键盘键
+
+参数 `keyName`: 键名
+
+返回值:是否已经按下
+
+### 参数
+
+| 参数名 | 类型 | 描述 | 默认值 |
+|:-------|:-----|:------|:-------|
+| `keyName` | `KeyboardKeyName` | - | - |
+
+### 返回值
+
+类型: `boolean`
+
+是否已经按下
+
+### 源代码
+
+**位置**: [第 104 行](https://github.com/Open-Yami-Community/open-yami-doc/blob/main/i18n/zh/docusaurus-plugin-content-docs/current/script/input.ts#L104)
+
+```typescript
+public getKey(keyName: KeyboardKeyName): boolean {
+    return this.keys[keyName] === 1
+  }
+```
+
+---
+
+
+
+文档生成时间：2026/1/31 13:13:59

@@ -23,8 +23,6 @@ let UI = new class UIManager {
   public eventTarget: UIElement | null = null
   /** 界面事件鼠标悬浮中的元素 */
   public eventHover: UIElement | null = null
-  /** 界面事件触摸中的元素列表 */
-  public touchedTargets: Array<UIElement> = []
   /** 元素管理器 */
   public manager!: UIElementManager
   /** 实体对象管理器 */
@@ -124,12 +122,14 @@ let UI = new class UIManager {
         // 替换引用元素
         if (node.class === 'reference') {
           const prefab = presets[node.prefabId]
-          console.log(node,prefab)
           if (node.hidden ||!node.enabled|| !prefab || prefab.class === 'reference' || prefab.hidden) {
             nodes.splice(i, 1)
             continue
           }
           const copy: UIElementData = Object.create(prefab)
+          copy.name = node.name
+          copy.enabled = node.enabled
+          copy.expanded = node.expanded
           copy.referenceId = node.presetId
           copy.events = Object.setPrototypeOf(node.events, prefab.events)
           copy.scripts = node.scripts
@@ -213,7 +213,7 @@ let UI = new class UIManager {
   }
 
   /**
-   * 创建预设元素的实例，并添加到跟元素
+   * 创建预设元素的实例，并添加到根元素
    * @param presetId 预设元素ID
    * @returns 创建的元素实例
    */
@@ -286,7 +286,7 @@ let UI = new class UIManager {
     }
   }
 
-  /** 移除最新的焦点 */
+  /** 移除最新的指针事件根元素 */
   public removeLatestPointerEventRoot(): void {
     const roots = this.pointerEventRoots
     this.removePointerEventRoot(roots[roots.length - 1])
@@ -706,7 +706,7 @@ let UI = new class UIManager {
    */
   private keydown(event: ScriptKeyboardEvent): void {
     if (UI.focuses.length !== 0) {
-      switch ((Input.event as ScriptKeyboardEvent).keyName) {
+      switch (event.keyName) {
         case 'ArrowUp':
           Input.bubbles.stop()
           UI.pressDirKey('Up')
@@ -776,13 +776,19 @@ let UI = new class UIManager {
    * @param event 脚本触摸事件
    */
   private touchstart(event: ScriptTouchEvent): void {
-    for (const {screenX, screenY} of event.changedTouches) {
-      const element = UI.getElementAt(screenX, screenY)
-      if (UI.touchedTargets.append(element)) {
-        Input.bubbles.start()
-        element.emit('touchstart', event, true)
-        UI._updateBubbleState(element)
+    for (const touch of event.changedTouches) {
+      const element = UI.getElementAt(touch.screenX, touch.screenY)
+      ScriptTouchEvent.setTarget(event, touch, element === UI.root ? null : element)
+    }
+    for (const copy of ScriptTouchEvent.forEachElement(event)) {
+      if (copy.target instanceof UIElement) {
+        Input.bubbles.push(true)
+        copy.target.emit('touchstart', event, true)
+        Input.bubbles.pop()
       }
+    }
+    if (!ScriptTouchEvent.loadGlobalTouchEvent(event)) {
+      Input.bubbles.stop()
     }
   }
 
@@ -791,10 +797,15 @@ let UI = new class UIManager {
    * @param event 脚本触摸事件
    */
   private touchmove(event: ScriptTouchEvent): void {
-    for (const element of UI.touchedTargets) {
-      Input.bubbles.start()
-      element.emit('touchmove', event, true)
-      UI._updateBubbleState(element)
+    for (const copy of ScriptTouchEvent.forEachElement(event)) {
+      if (copy.target instanceof UIElement) {
+        Input.bubbles.push(true)
+        copy.target.emit('touchmove', event, true)
+        Input.bubbles.pop()
+      }
+    }
+    if (!ScriptTouchEvent.loadGlobalTouchEvent(event)) {
+      Input.bubbles.stop()
     }
   }
 
@@ -803,13 +814,17 @@ let UI = new class UIManager {
    * @param event 脚本触摸事件
    */
   private touchend(event: ScriptTouchEvent): void {
-    if (UI.touchedTargets.length === 0) return
-    for (const element of UI.touchedTargets) {
-      Input.bubbles.start()
-      element.emit('touchend', event, true)
-      UI._updateBubbleState(element)
+    ScriptTouchEvent.deleteChangedTargetTouches(event)
+    for (const copy of ScriptTouchEvent.forEachElement(event)) {
+      if (copy.target instanceof UIElement) {
+        Input.bubbles.push(true)
+        copy.target.emit('touchend', event, true)
+        Input.bubbles.pop()
+      }
     }
-    UI.touchedTargets.length = 0
+    if (!ScriptTouchEvent.loadGlobalTouchEvent(event)) {
+      Input.bubbles.stop()
+    }
   }
 
   /**
@@ -1294,7 +1309,7 @@ class UIElement {
 
   /**
    * 将元素移动到父级列表中指定的索引位置
-   * @param pos 目标索引位置
+   * @param pos 目标索引位置(负数表示倒数第几个)
    */
   public moveToIndex(pos: number): void {
     const {parent} = this
@@ -2284,7 +2299,6 @@ class TextElement extends UIElement {
   public get verticalAlign(): VerticalAlignment {
     return this._verticalAlign
   }
-  // 写入垂直对齐
   public set verticalAlign(value: VerticalAlignment) {
     if (this._verticalAlign !== value) {
       switch (value) {
@@ -5590,7 +5604,7 @@ class WindowElement extends UIElement {
   private _paddingX!: number
   /** 窗口垂直内边距 */
   private _paddingY!: number
-  /** 一否已发送调整窗口请求 */
+  /** 是否已发送调整窗口请求 */
   private requesting?: boolean
 
   /** 默认窗口元素数据 */
@@ -5844,20 +5858,61 @@ class WindowElement extends UIElement {
         this.drawChildren()
         break
       case 'hidden':
-        if (!GL.depthTest) {
-          GL.alpha = 1
-          GL.blend = 'normal'
-          GL.depthTest = true
-          GL.enable(GL.DEPTH_TEST)
-          GL.depthFunc(GL.ALWAYS)
-          GL.matrix.set(this.matrix)
-          GL.fillRect(this.x, this.y, this.width, this.height, 0x00000000)
-          GL.depthFunc(GL.EQUAL)
-          this.drawChildren()
-          GL.clear(GL.DEPTH_BUFFER_BIT)
-          GL.disable(GL.DEPTH_TEST)
-          GL.depthTest = false
-        }
+       	const matrix = GL.matrix.set(this.matrix)
+				const L = this.x
+				const T = this.y
+				const R = L + this.width
+				const B = T + this.height
+				const a = matrix[0]
+				const b = matrix[1]
+				const c = matrix[3]
+				const d = matrix[4]
+				const e = matrix[6]
+				const f = matrix[7]
+				const x1 = Math.min(a * L + c * T + e, a * L + c * B + e, a * R + c * B + e, a * R + c * T + e)
+				const y1 = Math.min(b * L + d * T + f, b * L + d * B + f, b * R + d * B + f, b * R + d * T + f)
+				const x2 = Math.max(a * L + c * T + e, a * L + c * B + e, a * R + c * B + e, a * R + c * T + e)
+				const y2 = Math.max(b * L + d * T + f, b * L + d * B + f, b * R + d * B + f, b * R + d * T + f)
+				let sl = Math.max(Math.floor(x1), 0)
+				let st = Math.max(Math.floor(y1), 0)
+				let sr = Math.min(Math.ceil(x2), GL.width)
+				let sb = Math.min(Math.ceil(y2), GL.height)
+				let sw = sr - sl
+				let sh = sb - st
+				if (sw > 0 && sh > 0) {
+					const wasEnabled = GL.isEnabled(GL.SCISSOR_TEST)
+					let prevBox = null
+					// 计算当前裁剪框(以左下角为原点)
+					let nx = sl
+					let ny = GL.height - sb
+					let nw = sw
+					let nh = sh
+					if (wasEnabled) {
+						prevBox = GL.getParameter(GL.SCISSOR_BOX)
+						const px = prevBox[0]
+						const py = prevBox[1]
+						const pw = prevBox[2]
+						const ph = prevBox[3]
+						const pr = px + pw
+						const pb = py + ph
+						const nr = nx + nw
+						const nb = ny + nh
+						nx = Math.max(px, nx)
+						ny = Math.max(py, ny)
+						nw = Math.max(0, Math.min(pr, nr) - nx)
+						nh = Math.max(0, Math.min(pb, nb) - ny)
+					}
+					if (nw > 0 && nh > 0) {
+						GL.enable(GL.SCISSOR_TEST)
+						GL.scissor(nx, ny, nw, nh)
+						this.drawChildren()
+						if (wasEnabled && prevBox) {
+							GL.scissor(prevBox[0], prevBox[1], prevBox[2], prevBox[3])
+						} else if (!wasEnabled) {
+							GL.disable(GL.SCISSOR_TEST)
+						}
+					}
+				}
         break
     }
   }
@@ -6193,7 +6248,7 @@ class UIEntityManager extends EntityManager {
   /**
    * 从映射表中获取元素实例
    * @param key 实体ID/预设ID/引用ID/名称
-   * @returns 返回实元素实例
+   * @returns 返回元素实例
    */
   public override get(key: string): UIElement | undefined {
     return (super.get(key) ?? this.referenceIdMap[key]) as UIElement | undefined

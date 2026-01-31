@@ -19,6 +19,11 @@ const config: Config = {
 	tagline: "Open Yami 开源社区维护",
 	favicon: "img/favicon.ico",
 
+	// Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
+	future: {
+		v4: true, // Improve compatibility with the upcoming Docusaurus v4
+	},
+
 	// Set the production url of your site here
 	url: "https://open-yami-community.github.io/",
 	// Set the /<baseUrl>/ pathname under which your site is served
@@ -30,8 +35,7 @@ const config: Config = {
 	organizationName: "open-yami-community", // Usually your GitHub org/user name.
 	projectName: "open-yami-doc", // Usually your repo name.
 
-	onBrokenLinks: "warn",
-	onBrokenMarkdownLinks: "warn",
+	onBrokenLinks: "throw",
 
 	// Even if you don't use internationalization, you can use this field to set
 	// useful metadata like html lang. For example, if your site is Chinese, you
@@ -39,6 +43,9 @@ const config: Config = {
 	i18n: {
 		defaultLocale: "zh",
 		locales: ["en", "zh"],
+	},
+	markdown: {
+		format: "detect",
 	},
 
 	presets: [
@@ -50,7 +57,7 @@ const config: Config = {
 					// Please change this to your repo.
 					// Remove this to remove the "edit this page" links.
 					editUrl:
-						"https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/",
+						"https://github.com/Open-Yami-Community/open-yami-doc/tree/main/",
 				},
 				blog: {
 					showReadingTime: true,
@@ -61,7 +68,7 @@ const config: Config = {
 					// Please change this to your repo.
 					// Remove this to remove the "edit this page" links.
 					editUrl:
-						"https://github.com/facebook/docusaurus/tree/main/packages/create-docusaurus/templates/shared/",
+						"https://github.com/Open-Yami-Community/open-yami-doc/tree/main/",
 					// Useful options to enforce blogging best practices
 					onInlineTags: "warn",
 					onInlineAuthors: "warn",
@@ -78,9 +85,7 @@ const config: Config = {
 		// Replace with your project's social card
 		image: "img/logo.png",
 		colorMode: {
-			defaultMode: "dark",
-			disableSwitch: false,
-			respectPrefersColorScheme: false,
+			respectPrefersColorScheme: true,
 		},
 		navbar: {
 			title: "Yami RPG Editor Docs",
@@ -155,12 +160,6 @@ const config: Config = {
 					],
 				},
 			],
-			logo: {
-				alt: "Yami Logo",
-				src: "img/logo.png",
-				width: 80,
-				height: 80,
-			},
 			copyright: `<div class="footer-copyright">Copyright © 2023-${new Date().getFullYear()} <span class="footer-tech-accent">Yami 开源社区</span> & Contributors.</div>`,
 		},
 		prism: {

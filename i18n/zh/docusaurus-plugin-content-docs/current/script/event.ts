@@ -466,8 +466,6 @@ class EventHandler {
   public savedCommands?: CommandFunctionList
   /** 保存的指令索引 */
   public savedIndex?: number
-  /** 遍历数据列表 */
-  public forEach?: Array<ForEachCommandContext>
   /** 过渡数据列表 */
   public transitions?: Array<TransitionCommandContext>
   /** 回调函数列表 */
@@ -508,7 +506,7 @@ class EventHandler {
     CommandList = this.commands
     CommandIndex = this.index
     // 连续执行指令，直到返回false(中断)
-    while (CommandList[CommandIndex++]()) {}
+    while (CommandList[CommandIndex++]?.()) {}
     // 取回全局变量中的事件属性
     this.commands = CommandList
     this.index = CommandIndex
@@ -1335,11 +1333,17 @@ class ScriptTouchEvent {
   /** 浏览器触摸事件 */
   public browserTouchEvent: TouchEvent
 
+  /** 触摸事件目标元素 */
+  public target: UIElement | null
+
   /** 触摸点列表 */
-  public touches: Array<TouchPoint>
+  public readonly touches: Array<TouchPoint>
+
+  /** 目标元素触摸点列表 */
+  public readonly targetTouches: Array<TouchPoint>
 
   /** 已改变的触摸点列表 */
-  public changedTouches: Array<TouchPoint>
+  public readonly changedTouches: Array<TouchPoint>
 
   /** Shift键是否按下 */
   public get shiftKey(): boolean {
@@ -1364,27 +1368,37 @@ class ScriptTouchEvent {
   /**
    * @param event 原生触摸事件
    */
-  constructor(event: TouchEvent) {
-    this.browserTouchEvent = event
-    const touchMap = ScriptTouchEvent.touchMap
-    const rawTouches = event.touches
-    const newTouches = new Array(rawTouches.length) as Array<TouchPoint>
-    const rawChangedTouches = event.changedTouches
-    const newChangedTouches = new Array(rawChangedTouches.length)
-    for (let i = 0; i < rawTouches.length; i++) {
-      const rawTouch = rawTouches[i]
-      const id = rawTouch.identifier
-      const newTouch = touchMap[id] ??= new TouchPoint()
-      newTouches[i] = newTouch.set(rawTouch)
+  constructor(event: TouchEvent | ScriptTouchEvent) {
+    if (event instanceof TouchEvent) {
+      // 从原生触摸事件生成数据
+      this.browserTouchEvent = event
+      const rawTouches = event.touches
+      const newTouches = new Array(rawTouches.length) as Array<TouchPoint>
+      const rawChangedTouches = event.changedTouches
+      const newChangedTouches = new Array(rawChangedTouches.length)
+      const touchMap: HashMap<TouchPoint> = {}
+      for (let i = 0; i < rawTouches.length; i++) {
+        const rawTouch = rawTouches[i]
+        const id = rawTouch.identifier
+        newTouches[i] = touchMap[id] ??= new TouchPoint(rawTouch)
+      }
+      for (let i = 0; i < rawChangedTouches.length; i++) {
+        const rawTouch = rawChangedTouches[i]
+        const id = rawTouch.identifier
+        newChangedTouches[i] = touchMap[id] ??= new TouchPoint(rawTouch)
+      }
+      this.target = null
+      this.touches = newTouches
+      this.targetTouches = []
+      this.changedTouches = newChangedTouches
+    } else {
+      // 复制脚本触摸事件
+      this.browserTouchEvent = event.browserTouchEvent
+      this.target = event.target
+      this.touches = event.touches
+      this.targetTouches = []
+      this.changedTouches = event.changedTouches
     }
-    for (let i = 0; i < rawChangedTouches.length; i++) {
-      const rawTouch = rawChangedTouches[i]
-      const id = rawTouch.identifier
-      const newTouch = touchMap[id] ??= new TouchPoint()
-      newChangedTouches[i] = newTouch.set(rawTouch)
-    }
-    this.touches = newTouches
-    this.changedTouches = newChangedTouches
   }
 
   /**
@@ -1406,8 +1420,104 @@ class ScriptTouchEvent {
     return undefined
   }
 
-  /** 触摸点映射表 */
-  public static touchMap: HashMap<TouchPoint> = {}
+  /**
+   * 遍历每个目标元素
+   * @param event 脚本触摸事件
+   */
+  public static *forEachElement(event: ScriptTouchEvent): Generator<ScriptTouchEvent> {
+    const filters: Array<UIElement> = []
+    for (const touch of event.changedTouches) {
+      const target = ScriptTouchEvent.idToTargetMap.get(touch.id)
+      if (target instanceof UIElement && filters.append(target)) {
+        const copy = new ScriptTouchEvent(event)
+        ScriptTouchEvent.loadTargetTouches(copy, target)
+        yield copy
+      }
+    }
+  }
+
+  /**
+   * 设置目标元素
+   * @param event 脚本触摸事件
+   * @param touch 触摸点
+   * @param target 目标元素
+   */
+  public static setTarget(event: ScriptTouchEvent, touch: TouchPoint, target: UIElement | null): void {
+    event.target = target
+    ScriptTouchEvent.idToTargetMap.set(touch.id, target)
+    const idList = ScriptTouchEvent.targetToIdListMap.get(target)
+    if (idList instanceof Array) {
+      idList.append(touch.id)
+    } else {
+      ScriptTouchEvent.targetToIdListMap.set(target, [touch.id])
+    }
+  }
+
+  /**
+   * 删除变动的目标元素触摸点
+   * @param event 脚本触摸事件
+   */
+  public static deleteChangedTargetTouches(event: ScriptTouchEvent): void {
+    for (const touch of event.changedTouches) {
+      const target = ScriptTouchEvent.idToTargetMap.get(touch.id)
+      if (target !== undefined) {
+        ScriptTouchEvent.targetToIdListMap.get(target)?.remove(touch.id)
+      }
+    }
+  }
+
+  /**
+   * 删除变动的目标
+   * @param event 脚本触摸事件
+   */
+  public static deleteChangedTargets(event: ScriptTouchEvent): void {
+    for (const touch of event.changedTouches) {
+      const target = ScriptTouchEvent.idToTargetMap.get(touch.id)
+      if (target !== undefined) {
+        ScriptTouchEvent.idToTargetMap.delete(touch.id)
+        ScriptTouchEvent.targetToIdListMap.delete(target)
+      }
+    }
+  }
+
+  /**
+   * 加载目标触摸点
+   * @param event 脚本触摸事件
+   * @param target 目标元素
+   */
+  private static loadTargetTouches(event: ScriptTouchEvent, target: UIElement | null): void {
+    event.target = target
+    const idList = ScriptTouchEvent.targetToIdListMap.get(event.target)
+    if (idList instanceof Array) {
+      for (let i = 0; i < idList.length; i++) {
+        const touch = event.getTouch(idList[i])
+        if (touch instanceof TouchPoint) {
+          event.targetTouches.append(touch)
+        }
+      }
+    }
+  }
+
+  /**
+   * 加载全局触摸事件
+   * @param event 脚本触摸事件
+   * @returns 是否加载成功
+   */
+  public static loadGlobalTouchEvent(event: ScriptTouchEvent): boolean {
+    for (const touch of event.changedTouches) {
+      const target = ScriptTouchEvent.idToTargetMap.get(touch.id)
+      if (target === null) {
+        ScriptTouchEvent.loadTargetTouches(event, null)
+        return true
+      }
+    }
+    return false
+  }
+
+  /** {触摸点编号:目标元素}映射表 */
+  private static idToTargetMap: Map<number, UIElement | null> = new Map()
+  /** {目标元素:触摸点编号列表}映射表 */
+  private static targetToIdListMap: Map<UIElement | null, Array<number>> = new Map()
 }
 
 /** ******************************** 触摸点 ******************************** */
@@ -1429,10 +1539,9 @@ class TouchPoint {
   public sceneY: number = 0
 
   /**
-   * 设置触摸点
    * @param touch 原生触摸点
    */
-  public set(touch: Touch): TouchPoint {
+  constructor(touch: Touch) {
     this.id = touch.identifier
     const {x: screenX, y: screenY} = Mouse.convertClientToScreenCoords(touch.clientX, touch.clientY)
     this.screenX = screenX
@@ -1442,7 +1551,6 @@ class TouchPoint {
     const {x: sceneX, y: sceneY} = Mouse.convertScreenToSceneCoords(screenX, screenY)
     this.sceneX = sceneX
     this.sceneY = sceneY
-    return this
   }
 }
 
@@ -1453,6 +1561,8 @@ class ScriptGamepadEvent {
   public gamepad: Gamepad
   /** 摇杆角度(默认: -1) */
   public stickAngle: number
+  /** 摇杆强度(默认: 0) */
+  public stickMagnitude: number
   /** 键码(默认: -1) */
   public buttonCode: number
   /** 键名(默认: '') */
@@ -1466,6 +1576,7 @@ class ScriptGamepadEvent {
   constructor(gamepad: Gamepad) {
     this.gamepad = gamepad
     this.stickAngle = Controller.stickAngle
+    this.stickMagnitude = Controller.stickMagnitude
     this.buttonCode = Controller.buttonCode
     this.buttonName = Controller.buttonName
     this.states = Controller.states

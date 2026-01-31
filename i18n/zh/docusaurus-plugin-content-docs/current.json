@@ -68,7 +68,7 @@
     "description": "The label for category Skill in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.Inventory": {
-    "message": "包裹",
+    "message": "库存",
     "description": "The label for category Inventory in sidebar tutorialSidebar"
   },
   "sidebar.tutorialSidebar.category.System": {
@@ -78,9 +78,5 @@
   "sidebar.tutorialSidebar.category.Hotkeys": {
     "message": "快捷键",
     "description": "The label for category Hotkeys in sidebar tutorialSidebar"
-  },
-  "sidebar.tutorialSidebar.category.Script": {
-    "message": "脚本",
-    "description": "The label for category Script in sidebar tutorialSidebar"
   }
 }
