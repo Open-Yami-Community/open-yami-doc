@@ -133,7 +133,102 @@ function sanitizeJSDoc(text: string): string {
         .join('\n\n');
 }
 
-function generateMarkdown(items: DocItem[], sourceFile: SourceFile, githubFileUrl: string, targetDocPath: string): string {
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function escapeTypeMarkdown(typeText: string): string {
+    return typeText
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\|/g, '\\|')
+        .replace(/\*/g, '\\*')
+        .replace(/_/g, '\\_');
+}
+
+function buildDefinitionUrl(sourceFile: SourceFile, node: Node, githubFileUrl: string): string {
+    const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart());
+    return `${githubFileUrl}#L${line + 1}`;
+}
+
+function buildTypeIndexFromSourceFile(sourceFile: SourceFile, githubFileUrl: string): Map<string, string> {
+    const typeIndex = new Map<string, string>();
+
+    function visit(node: Node) {
+        if (
+            ts.isTypeAliasDeclaration(node) ||
+            ts.isInterfaceDeclaration(node) ||
+            ts.isClassDeclaration(node) ||
+            ts.isEnumDeclaration(node)
+        ) {
+            const name = node.name?.getText(sourceFile);
+            if (name && !typeIndex.has(name)) {
+                typeIndex.set(name, buildDefinitionUrl(sourceFile, node, githubFileUrl));
+            }
+        }
+        ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
+    return typeIndex;
+}
+
+function buildTypeIndexFromDirectory(directoryPath: string, workspaceFolder: string): Map<string, string> {
+    const typeIndex = new Map<string, string>();
+    if (!fs.existsSync(directoryPath)) {
+        return typeIndex;
+    }
+
+    const files = fs.readdirSync(directoryPath).filter((file: string) => file.endsWith('.d.ts') || file.endsWith('.ts'));
+    for (const file of files) {
+        const filePath = path.join(directoryPath, file);
+        const repoRelativePath = path.relative(workspaceFolder, filePath).replace(/\\/g, '/');
+        const githubFileUrl = `https://github.com/Open-Yami-Community/open-yami-doc/blob/main/${repoRelativePath}`;
+        const sourceText = fs.readFileSync(filePath, 'utf-8');
+        const sourceFile = ts.createSourceFile(
+            file,
+            sourceText,
+            ts.ScriptTarget.Latest,
+            true
+        );
+        const fileIndex = buildTypeIndexFromSourceFile(sourceFile, githubFileUrl);
+        for (const [name, url] of fileIndex) {
+            if (!typeIndex.has(name)) {
+                typeIndex.set(name, url);
+            }
+        }
+    }
+
+    return typeIndex;
+}
+
+function renderTypeMarkdown(typeText: string, typeIndex: Map<string, string>): string {
+    if (!typeText) return '';
+    let linked = false;
+    let result = typeText;
+    const names = Array.from(typeIndex.keys()).sort((a, b) => b.length - a.length);
+    for (const name of names) {
+        const url = typeIndex.get(name);
+        if (!url) continue;
+        const regex = new RegExp(`\\b${escapeRegExp(name)}\\b`, 'g');
+        const replaced = result.replace(regex, `[\`${name}\`](${url})`);
+        if (replaced !== result) {
+            linked = true;
+            result = replaced;
+        }
+    }
+
+    const escaped = escapeTypeMarkdown(result);
+    return linked ? escaped : `\`${escaped}\``;
+}
+
+function generateMarkdown(
+    items: DocItem[],
+    sourceFile: SourceFile,
+    githubFileUrl: string,
+    targetDocPath: string,
+    typeIndex: Map<string, string>
+): string {
     let markdown = '';
 
     for (const item of items) {
@@ -146,7 +241,7 @@ function generateMarkdown(items: DocItem[], sourceFile: SourceFile, githubFileUr
 
         // 添加所属类信息（如果有）
         if (item.parentClass) {
-            markdown += `**所属类**: \`${item.parentClass}\`\n\n`;
+            markdown += `**所属类**: ${renderTypeMarkdown(item.parentClass, typeIndex)}\n\n`;
         }
 
         markdown += `**定义位置**: [\`${path.basename(githubFileUrl)}\`](${githubFileUrl})\n\n`;
@@ -158,7 +253,7 @@ function generateMarkdown(items: DocItem[], sourceFile: SourceFile, githubFileUr
             ).join(', ');
 
             if (heritage) {
-                markdown += `**继承**: \`${heritage}\`\n\n`;
+                markdown += `**继承**: ${renderTypeMarkdown(heritage, typeIndex)}\n\n`;
             }
         }
 
@@ -175,19 +270,19 @@ function generateMarkdown(items: DocItem[], sourceFile: SourceFile, githubFileUr
             markdown += '|:-------|:-----|:------|:-------|\n';
             for (const param of item.parameters) {
                 const paramName = sanitizeMarkdown(param.name);
-                const paramType = sanitizeType(param.type);
+                const paramType = renderTypeMarkdown(param.type, typeIndex);
                 const paramDesc = sanitizeJSDoc(param.description || '');
                 const defaultValue = param.initializer ?
                     sanitizeMarkdown(param.initializer.getText(sourceFile)) : '-';
-                markdown += `| \`${paramName}\` | \`${paramType}\` | ${paramDesc || '-'} | ${defaultValue} |\n`;
+                markdown += `| \`${paramName}\` | ${paramType} | ${paramDesc || '-'} | ${defaultValue} |\n`;
             }
             markdown += '\n';
         }
 
         // 添加返回值信息
         if (item.returnType) {
-            const safeReturnType = sanitizeType(item.returnType);
-            markdown += `### 返回值\n\n类型: \`${safeReturnType}\`\n\n`;
+            const safeReturnType = renderTypeMarkdown(item.returnType, typeIndex);
+            markdown += `### 返回值\n\n类型: ${safeReturnType}\n\n`;
 
             // 如果有返回值描述
             if (item.returnDescription) {
@@ -199,7 +294,7 @@ function generateMarkdown(items: DocItem[], sourceFile: SourceFile, githubFileUr
         if (item.examples && item.examples.length > 0) {
             markdown += '### 示例\n\n';
             for (const example of item.examples) {
-                markdown += '```typescript\n';
+                markdown += '```ts\n';
                 markdown += example;
                 markdown += '\n```\n\n';
             }
@@ -236,7 +331,7 @@ function generateMarkdown(items: DocItem[], sourceFile: SourceFile, githubFileUr
             const end = item.node.getEnd();
             const code = sourceFile.text.substring(start, end);
 
-            markdown += '```typescript\n';
+            markdown += '```ts\n';
             markdown += code;
             markdown += '\n```\n\n';
         }
@@ -403,6 +498,9 @@ function emptyDirectory(directory: string) {
 
 async function main() {
     const scriptDir = path.join(__dirname);
+    const workspaceFolder = path.resolve(scriptDir, '..', '..', '..', '..', '..');
+    const yamiTypeDir = path.join(scriptDir, 'yami');
+    const yamiTypeIndex = buildTypeIndexFromDirectory(yamiTypeDir, workspaceFolder);
     const files = fs.readdirSync(scriptDir).filter((file: string) => file.endsWith('.ts') && file !== 'generateDocs.ts');
 
     // 清空并创建api目录
@@ -454,7 +552,6 @@ async function main() {
         fs.writeFileSync(path.join(moduleDir, '_category_.json'), JSON.stringify(categoryJson, null, 2));
 
         const filePath = path.join(scriptDir, file);
-        const workspaceFolder = path.resolve(scriptDir, '..', '..', '..', '..', '..');
         const repoRelativePath = path.relative(workspaceFolder, filePath).replace(/\\/g, '/');
         const githubFileUrl = `https://github.com/Open-Yami-Community/open-yami-doc/blob/main/${repoRelativePath}`;
         const sourceText = fs.readFileSync(filePath, 'utf-8');
@@ -464,6 +561,12 @@ async function main() {
             ts.ScriptTarget.Latest,
             true
         );
+
+        const localTypeIndex = buildTypeIndexFromSourceFile(sourceFile, githubFileUrl);
+        const mergedTypeIndex = new Map<string, string>(yamiTypeIndex);
+        for (const [name, url] of localTypeIndex) {
+            mergedTypeIndex.set(name, url);
+        }
 
         const docItems = extractDocItems(sourceFile);
         moduleInfo[moduleName] = {
@@ -475,7 +578,7 @@ async function main() {
         for (const item of docItems) {
             const itemName = sanitizeMarkdown(item.name);
             const docPath = path.join(moduleDir, `${itemName}.md`);
-            const markdown = generateMarkdown([item], sourceFile, githubFileUrl, docPath);
+            const markdown = generateMarkdown([item], sourceFile, githubFileUrl, docPath, mergedTypeIndex);
             const kind = ts.SyntaxKind[item.kind];
 
             if (kind === 'MethodDeclaration') {
