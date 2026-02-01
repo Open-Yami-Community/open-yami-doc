@@ -163,8 +163,10 @@ const config: Config = {
 			copyright: `<div class="footer-copyright">Copyright © 2023-${new Date().getFullYear()} <span class="footer-tech-accent">Yami 开源社区</span> & Contributors.</div>`,
 		},
 		prism: {
-			theme: prismThemes.github,
-			darkTheme: prismThemes.dracula,
+			theme: prismThemes.oneLight,
+			darkTheme: prismThemes.oneDark,
+			defaultLanguage: "typescript",
+			additionalLanguages: ["typescript"],
 		},
 	} satisfies Preset.ThemeConfig,
 	themes: [
